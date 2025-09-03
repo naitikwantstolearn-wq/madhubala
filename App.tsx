@@ -7,11 +7,13 @@ import { SparklesIcon } from './components/icons/SparklesIcon';
 import { AppState, MimeType } from './types';
 import { fileToBase64 } from './utils/fileUtils';
 import { generateTryOnImage } from './services/geminiService';
+import { ClothingInput } from './components/ClothingInput';
 
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>(AppState.IDLE);
   const [modelImage, setModelImage] = useState<File | null>(null);
   const [clothingImage, setClothingImage] = useState<File | null>(null);
+  const [clothingDescription, setClothingDescription] = useState<string>('');
   const [originalImageUrl, setOriginalImageUrl] = useState<string>('');
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
@@ -53,7 +55,8 @@ const App: React.FC = () => {
       
       const resultBase64 = await generateTryOnImage(
         { data: modelBase64, mimeType: modelMimeType },
-        { data: clothingBase64, mimeType: clothingMimeType }
+        { data: clothingBase64, mimeType: clothingMimeType },
+        clothingDescription
       );
       setGeneratedImageUrl(`data:image/png;base64,${resultBase64}`);
       setAppState(AppState.SUCCESS);
@@ -69,6 +72,7 @@ const App: React.FC = () => {
     setAppState(AppState.IDLE);
     setModelImage(null);
     setClothingImage(null);
+    setClothingDescription('');
     if (originalImageUrl) URL.revokeObjectURL(originalImageUrl);
     setOriginalImageUrl('');
     setGeneratedImageUrl('');
@@ -81,6 +85,7 @@ const App: React.FC = () => {
     setAppState(AppState.IDLE);
     setGeneratedImageUrl('');
     setClothingImage(null);
+    setClothingDescription('');
     setError(null);
     setClothingUploaderKey(Date.now());
   };
@@ -99,8 +104,9 @@ const App: React.FC = () => {
                 <ImageUploader key={modelUploaderKey} onImageUpload={handleModelImageUpload} disabled={isGenerating} aspectClass="aspect-[3/4]" />
               </div>
               <div className="flex flex-col gap-6 p-6 bg-gray-800/50 rounded-2xl shadow-xl">
-                <h2 className="text-xl font-semibold text-indigo-400">2. Upload Clothing Image</h2>
+                <h2 className="text-xl font-semibold text-indigo-400">2. Upload & Describe Clothing</h2>
                 <ImageUploader key={clothingUploaderKey} onImageUpload={handleClothingImageUpload} disabled={isGenerating} aspectClass="aspect-square" />
+                <ClothingInput value={clothingDescription} onChange={(e) => setClothingDescription(e.target.value)} disabled={isGenerating} />
               </div>
             </div>
             <div className="max-w-4xl mx-auto mt-8">

@@ -16,13 +16,21 @@ interface ImageInput {
  * Generates a new image by applying a clothing item from one image to a person in another.
  * @param modelImage The model's image.
  * @param clothingImage The clothing item's image.
+ * @param description An optional text description to guide the AI.
  * @returns A promise that resolves to the base64 encoded string of the generated image.
  */
 export const generateTryOnImage = async (
   modelImage: ImageInput,
   clothingImage: ImageInput,
+  description: string,
 ): Promise<string> => {
   try {
+    let prompt = `Take the clothing item from the second image and realistically place it onto the person in the first image. It is critical to preserve the person's face, hair, body shape, and skin tone. The background of the first image must also remain unchanged. Only replace the existing clothing.`;
+
+    if (description.trim()) {
+      prompt = `Take the clothing item from the second image and realistically place it onto the person in the first image, using the following description as a guide: "${description}". It is critical to preserve the person's face, hair, body shape, and skin tone. The background of the first image must also remain unchanged. Only replace the existing clothing.`;
+    }
+
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image-preview',
       contents: {
@@ -40,7 +48,7 @@ export const generateTryOnImage = async (
             },
           },
           {
-            text: `Take the clothing item from the second image and realistically place it onto the person in the first image. It is critical to preserve the person's face, hair, body shape, and skin tone. The background of the first image must also remain unchanged. Only replace the existing clothing.`,
+            text: prompt,
           },
         ],
       },
