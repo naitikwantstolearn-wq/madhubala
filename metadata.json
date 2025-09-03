@@ -1,0 +1,5 @@
+{
+  "name": "AI Fashion Try-On",
+  "description": "A web-based AI tool that allows you to virtually try on different outfits. Upload a photo of a person, describe the clothing you want to see, and let the AI generate a new look while preserving the model's identity and pose.",
+  "requestFramePermissions": []
+}
