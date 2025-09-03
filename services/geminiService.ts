@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Modality } from "@google/genai";
 import { MimeType } from '../types';
 
@@ -17,24 +18,26 @@ interface ImageInput {
  * @param modelImage The model's image.
  * @param clothingImage The clothing item's image (optional).
  * @param description An optional text description to guide the AI.
+ * @param isVariation If true, requests a variation of the previous result.
  * @returns A promise that resolves to the base64 encoded string of the generated image.
  */
 export const generateTryOnImage = async (
   modelImage: ImageInput,
   clothingImage: ImageInput | null,
   description: string,
+  isVariation: boolean = false,
 ): Promise<string> => {
   try {
-    let prompt = '';
+    let prompt = isVariation ? 'Generate a creative variation of the outfit. ' : '';
     const hasClothingImage = !!clothingImage;
     const hasDescription = !!description.trim();
 
     if (hasClothingImage && hasDescription) {
-      prompt = `Take the clothing item from the second image and realistically place it onto the person in the first image, using the following description as a guide: "${description}". It is critical to preserve the person's face, hair, body shape, and skin tone. The background of the first image must also remain unchanged. Only replace the existing clothing.`;
+      prompt += `Take the clothing item from the second image and realistically place it onto the person in the first image, using the following description as a guide: "${description}". It is critical to preserve the person's face, hair, body shape, and skin tone. The background of the first image must also remain unchanged. Only replace the existing clothing.`;
     } else if (hasClothingImage) {
-      prompt = `Take the clothing item from the second image and realistically place it onto the person in the first image. It is critical to preserve the person's face, hair, body shape, and skin tone. The background of the first image must also remain unchanged. Only replace the existing clothing.`;
+      prompt += `Take the clothing item from the second image and realistically place it onto the person in the first image. It is critical to preserve the person's face, hair, body shape, and skin tone. The background of the first image must also remain unchanged. Only replace the existing clothing.`;
     } else if (hasDescription) {
-      prompt = `Based on the following description: "${description}", realistically generate a new outfit for the person in the image. It is critical to preserve the person's face, hair, body shape, and skin tone. The background of the image must also remain unchanged. Only replace the existing clothing.`;
+      prompt += `Based on the following description: "${description}", realistically generate a new outfit for the person in the image. It is critical to preserve the person's face, hair, body shape, and skin tone. The background of the image must also remain unchanged. Only replace the existing clothing.`;
     } else {
         // This case should be prevented by frontend validation, but as a safeguard:
         throw new Error("Either a clothing image or a description must be provided.");
