@@ -22,7 +22,7 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({ progress, message, dur
     return (
         <div className="w-full bg-gray-700 rounded-full p-1.5 shadow-inner">
             <div
-                className="bg-gradient-to-r from-indigo-500 to-purple-600 h-8 rounded-full transition-all duration-300 ease-out flex items-center justify-center"
+                className="bg-gradient-to-r from-indigo-500 to-purple-600 h-8 rounded-full flex items-center justify-center"
                 style={{ width: `${Math.max(5, progress)}%` }}
             >
                 <span className="text-sm font-bold text-white shadow-sm">

@@ -74,7 +74,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImageUpload, dis
                 <img src={previews[0]} alt="Preview" className={`w-full h-auto rounded-lg object-cover ${aspectClass}`} />
                 <div 
                     onClick={handleClick}
-                    className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-lg cursor-pointer"
+                    className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 rounded-lg cursor-pointer"
                 >
                     Click to change image
                 </div>
@@ -84,14 +84,31 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImageUpload, dis
     
     if (previews.length > 0 && multiple) {
         return (
-             <div
+            <div 
+                className={`relative group w-full ${aspectClass} rounded-lg overflow-hidden bg-gray-900`}
                 onClick={handleClick}
-                className={`w-full ${aspectClass} border-2 border-dashed rounded-lg flex flex-col justify-center items-center text-center p-4 transition-colors duration-300 border-indigo-500 bg-gray-800/80 ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
             >
-                <UploadIcon className="w-12 h-12 text-indigo-400 mb-2" />
-                <p className="font-semibold text-white">{previews.length} image{previews.length > 1 ? 's' : ''} selected</p>
-                <p className="text-xs text-gray-400">Click to change selection</p>
-             </div>
+                <div className={`grid h-full w-full gap-1 ${previews.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                    {previews.slice(0, 4).map((src, index) => (
+                        <img 
+                            key={index}
+                            src={src} 
+                            alt={`Preview ${index + 1}`}
+                            className="w-full h-full object-cover"
+                        />
+                    ))}
+                </div>
+                <div 
+                    className="absolute inset-0 bg-black bg-opacity-60 flex flex-col items-center justify-center text-white opacity-0 group-hover:opacity-100 cursor-pointer p-4 text-center"
+                >
+                    <UploadIcon className="w-10 h-10 mb-2" />
+                    <p className="font-semibold">{previews.length} image{previews.length > 1 ? 's' : ''} selected</p>
+                    <p className="text-sm text-gray-300">Click to change selection</p>
+                    {previews.length > 4 && (
+                        <p className="text-xs text-gray-400 mt-2">(Showing first 4)</p>
+                    )}
+                </div>
+            </div>
         )
     }
 
@@ -101,7 +118,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImageUpload, dis
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
             onClick={handleClick}
-            className={`w-full ${aspectClass} border-2 border-dashed rounded-lg flex flex-col justify-center items-center text-center p-4 transition-colors duration-300 ${isDragging ? 'border-indigo-500 bg-gray-700/50' : 'border-gray-600 hover:border-indigo-500'} ${disabled ? 'cursor-not-allowed bg-gray-800' : 'cursor-pointer bg-gray-900/50'}`}
+            className={`w-full ${aspectClass} border-2 border-dashed rounded-lg flex flex-col justify-center items-center text-center p-4 ${isDragging ? 'border-indigo-500 bg-gray-700/50' : 'border-gray-600 hover:border-indigo-500'} ${disabled ? 'cursor-not-allowed bg-gray-800' : 'cursor-pointer bg-gray-900/50'}`}
         >
             <UploadIcon className="w-12 h-12 text-gray-500 mb-2" />
             <p className="text-gray-400">

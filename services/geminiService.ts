@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Modality } from "@google/genai";
 import { MimeType } from '../types';
 
@@ -94,4 +93,47 @@ export const generateTryOnImage = async (
     }
     throw new Error("An unexpected error occurred during image generation.");
   }
+};
+
+/**
+ * Upscales an image to a higher resolution using AI.
+ * @param base64Image The base64 encoded string of the image to upscale.
+ * @param mimeType The MIME type of the image.
+ * @returns A promise that resolves to the base64 encoded string of the upscaled image.
+ */
+export const upscaleImage = async (base64Image: string, mimeType: MimeType): Promise<string> => {
+    try {
+        const prompt = "Upscale this image to a high-resolution, photorealistic output. Enhance details and clarity in the textures of fabric, skin, and hair. The goal is a crisp, clean image that preserves the natural look without appearing artificial or overly smoothed.";
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-image-preview',
+            contents: {
+                parts: [
+                    { inlineData: { data: base64Image, mimeType: mimeType } },
+                    { text: prompt }
+                ],
+            },
+            config: {
+                responseModalities: [Modality.IMAGE, Modality.TEXT],
+            },
+        });
+
+        const imagePart = response.candidates?.[0]?.content?.parts?.find(part => part.inlineData);
+
+        if (imagePart && imagePart.inlineData) {
+            return imagePart.inlineData.data;
+        } else {
+            const textPart = response.candidates?.[0]?.content?.parts?.find(part => part.text);
+            if (textPart && textPart.text) {
+                throw new Error(`The AI could not upscale the image. Reason: ${textPart.text}`);
+            }
+            throw new Error("Image upscaling failed: No image data was returned by the API.");
+        }
+    } catch (error) {
+        console.error("Error calling Gemini API for upscaling:", error);
+        if (error instanceof Error) {
+            throw new Error(`API Error: ${error.message}`);
+        }
+        throw new Error("An unexpected error occurred during image upscaling.");
+    }
 };

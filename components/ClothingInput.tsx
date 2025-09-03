@@ -20,7 +20,7 @@ export const ClothingInput: React.FC<ClothingInputProps> = ({ value, onChange, d
                 onChange={onChange}
                 disabled={disabled}
                 placeholder="e.g., 'a red silk dress with long sleeves', 'a blue denim jacket over a white t-shirt', 'a futuristic silver space suit'"
-                className="w-full p-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors duration-200 resize-none disabled:bg-gray-700 disabled:cursor-not-allowed"
+                className="w-full p-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none disabled:bg-gray-700 disabled:cursor-not-allowed"
             />
         </div>
     );

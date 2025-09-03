@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Header } from './components/Header';
 import { ImageUploader } from './components/ImageUploader';
@@ -7,7 +6,7 @@ import { ProgressBar } from './components/ProgressBar';
 import { SparklesIcon } from './components/icons/SparklesIcon';
 import { AppState, MimeType } from './types';
 import { fileToBase64 } from './utils/fileUtils';
-import { generateTryOnImage } from './services/geminiService';
+import { generateTryOnImage, upscaleImage } from './services/geminiService';
 import { ClothingInput } from './components/ClothingInput';
 
 const ESTIMATED_GENERATION_TIME_SECONDS = 45;
@@ -27,6 +26,7 @@ const App: React.FC = () => {
 
   const [modelUploaderKey, setModelUploaderKey] = useState(Date.now());
   const [clothingUploaderKey, setClothingUploaderKey] = useState(Date.now() + 1);
+  const [upscalingStatus, setUpscalingStatus] = useState<{ [key: number]: boolean }>({});
 
   const clearProgressInterval = () => {
     if (progressIntervalRef.current) {
@@ -170,6 +170,35 @@ const App: React.FC = () => {
     }
   };
 
+  const handleUpscaleImage = async (imageIndex: number) => {
+    setUpscalingStatus(prev => ({ ...prev, [imageIndex]: true }));
+    setError(null);
+
+    try {
+      const imageUrl = generatedImageUrls[imageIndex];
+      const [header, base64Data] = imageUrl.split(',');
+      const mimeType = header.match(/:(.*?);/)?.[1] as MimeType | undefined;
+
+      if (!base64Data || !mimeType || !['image/png', 'image/jpeg'].includes(mimeType)) {
+        throw new Error('Could not parse image data for upscaling.');
+      }
+
+      const upscaledBase64 = await upscaleImage(base64Data, mimeType);
+      const newImageUrl = `data:image/png;base64,${upscaledBase64}`;
+
+      setGeneratedImageUrls(prevUrls => {
+        const newUrls = [...prevUrls];
+        newUrls[imageIndex] = newImageUrl;
+        return newUrls;
+      });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred during upscaling.';
+      console.error(err);
+      setError(`Upscaling failed: ${errorMessage}`);
+    } finally {
+      setUpscalingStatus(prev => ({ ...prev, [imageIndex]: false }));
+    }
+  };
 
   const handleReset = () => {
     setAppState(AppState.IDLE);
@@ -184,6 +213,7 @@ const App: React.FC = () => {
     setProgressMessage('');
     setModelUploaderKey(Date.now());
     setClothingUploaderKey(Date.now() + 1);
+    setUpscalingStatus({});
   };
   
   const handleTryAnotherOutfit = () => {
@@ -196,6 +226,7 @@ const App: React.FC = () => {
     setProgress(0);
     setProgressMessage('');
     setClothingUploaderKey(Date.now());
+    setUpscalingStatus({});
   };
 
   const isGenerating = appState === AppState.LOADING;
@@ -230,7 +261,7 @@ const App: React.FC = () => {
                 <button
                   onClick={handleGenerateClick}
                   disabled={!canGenerate || isGenerating}
-                  className="flex items-center justify-center gap-2 w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg focus:outline-none focus:ring-4 focus:ring-indigo-500/50"
+                  className="flex items-center justify-center gap-2 w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg shadow-lg focus:outline-none focus:ring-4 focus:ring-indigo-500/50"
                 >
                     <SparklesIcon />
                     <span>Generate New Outfit{modelImages.length > 1 ? 's' : ''}</span>
@@ -245,6 +276,8 @@ const App: React.FC = () => {
             clothingDescription={clothingDescription}
             onTryAnother={handleTryAnotherOutfit}
             onGenerateVariation={handleGenerateVariation}
+            onUpscale={handleUpscaleImage}
+            upscalingStatus={upscalingStatus}
           />
         )}
         {error && (
