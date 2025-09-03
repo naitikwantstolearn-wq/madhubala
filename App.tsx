@@ -34,8 +34,8 @@ const App: React.FC = () => {
   }, []);
 
   const handleGenerateClick = async () => {
-    if (!modelImage || !clothingImage) {
-      setError('Please upload a model image and a clothing image.');
+    if (!modelImage || (!clothingImage && !clothingDescription.trim())) {
+      setError('Please upload a model image and provide either a clothing image or a description.');
       return;
     }
 
@@ -44,18 +44,24 @@ const App: React.FC = () => {
 
     try {
       const modelMimeType = modelImage.type as MimeType;
-      const clothingMimeType = clothingImage.type as MimeType;
-
-      if (!['image/png', 'image/jpeg'].includes(modelMimeType) || !['image/png', 'image/jpeg'].includes(clothingMimeType)) {
-        throw new Error('Please ensure both uploaded files are PNG or JPEG images.');
+      if (!['image/png', 'image/jpeg'].includes(modelMimeType)) {
+        throw new Error('Please ensure the model file is a PNG or JPEG image.');
       }
-
       const modelBase64 = await fileToBase64(modelImage);
-      const clothingBase64 = await fileToBase64(clothingImage);
+      
+      let clothingInput: { data: string; mimeType: MimeType } | null = null;
+      if (clothingImage) {
+        const clothingMimeType = clothingImage.type as MimeType;
+        if (!['image/png', 'image/jpeg'].includes(clothingMimeType)) {
+            throw new Error('Please ensure the clothing file is a PNG or JPEG image.');
+        }
+        const clothingBase64 = await fileToBase64(clothingImage);
+        clothingInput = { data: clothingBase64, mimeType: clothingMimeType };
+      }
       
       const resultBase64 = await generateTryOnImage(
         { data: modelBase64, mimeType: modelMimeType },
-        { data: clothingBase64, mimeType: clothingMimeType },
+        clothingInput,
         clothingDescription
       );
       setGeneratedImageUrl(`data:image/png;base64,${resultBase64}`);
@@ -104,7 +110,8 @@ const App: React.FC = () => {
                 <ImageUploader key={modelUploaderKey} onImageUpload={handleModelImageUpload} disabled={isGenerating} aspectClass="aspect-[3/4]" />
               </div>
               <div className="flex flex-col gap-6 p-6 bg-gray-800/50 rounded-2xl shadow-xl">
-                <h2 className="text-xl font-semibold text-indigo-400">2. Upload & Describe Clothing</h2>
+                <h2 className="text-xl font-semibold text-indigo-400">2. Provide Outfit</h2>
+                <p className="text-sm text-gray-400 -mt-4">Upload an image, write a description, or both!</p>
                 <ImageUploader key={clothingUploaderKey} onImageUpload={handleClothingImageUpload} disabled={isGenerating} aspectClass="aspect-square" />
                 <ClothingInput value={clothingDescription} onChange={(e) => setClothingDescription(e.target.value)} disabled={isGenerating} />
               </div>
@@ -112,7 +119,7 @@ const App: React.FC = () => {
             <div className="max-w-4xl mx-auto mt-8">
               <button
                 onClick={handleGenerateClick}
-                disabled={!modelImage || !clothingImage || isGenerating}
+                disabled={!modelImage || (!clothingImage && !clothingDescription.trim()) || isGenerating}
                 className="flex items-center justify-center gap-2 w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg focus:outline-none focus:ring-4 focus:ring-indigo-500/50"
               >
                 {isGenerating ? (
