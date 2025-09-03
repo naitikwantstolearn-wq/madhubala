@@ -1,23 +1,32 @@
-
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { UploadIcon } from './icons/UploadIcon';
 
 interface ImageUploaderProps {
   onImageUpload: (file: File) => void;
   disabled: boolean;
+  aspectClass?: string;
 }
 
-export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImageUpload, disabled }) => {
+export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImageUpload, disabled, aspectClass = 'aspect-[3/4]' }) => {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    // Clean up object URL to prevent memory leaks
+    return () => {
+      if (imagePreview) {
+        URL.revokeObjectURL(imagePreview);
+      }
+    };
+  }, [imagePreview]);
+
   const handleFile = useCallback((file: File | null | undefined) => {
     if (file && (file.type === 'image/jpeg' || file.type === 'image/png')) {
-      setImagePreview(URL.createObjectURL(file));
+      const newPreviewUrl = URL.createObjectURL(file);
+      setImagePreview(newPreviewUrl);
       onImageUpload(file);
-    } else {
-      // Basic error handling for non-image files
+    } else if (file) {
       alert('Please upload a valid image file (JPG or PNG).');
     }
   }, [onImageUpload]);
@@ -62,7 +71,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImageUpload, dis
       />
       {imagePreview ? (
         <div className="relative group">
-          <img src={imagePreview} alt="Model preview" className="w-full h-auto rounded-lg object-cover aspect-[3/4]" />
+          <img src={imagePreview} alt="Preview" className={`w-full h-auto rounded-lg object-cover ${aspectClass}`} />
           <div 
             onClick={handleClick}
             className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-lg cursor-pointer">
@@ -75,7 +84,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImageUpload, dis
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           onClick={handleClick}
-          className={`w-full aspect-[3/4] border-2 border-dashed rounded-lg flex flex-col justify-center items-center text-center p-4 transition-colors duration-300 ${isDragging ? 'border-indigo-500 bg-gray-700/50' : 'border-gray-600 hover:border-indigo-500'} ${disabled ? 'cursor-not-allowed bg-gray-800' : 'cursor-pointer bg-gray-900/50'}`}
+          className={`w-full ${aspectClass} border-2 border-dashed rounded-lg flex flex-col justify-center items-center text-center p-4 transition-colors duration-300 ${isDragging ? 'border-indigo-500 bg-gray-700/50' : 'border-gray-600 hover:border-indigo-500'} ${disabled ? 'cursor-not-allowed bg-gray-800' : 'cursor-pointer bg-gray-900/50'}`}
         >
           <UploadIcon className="w-12 h-12 text-gray-500 mb-2" />
           <p className="text-gray-400">

@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Modality } from "@google/genai";
 import { MimeType } from '../types';
 
@@ -8,17 +7,20 @@ if (!process.env.API_KEY) {
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
+interface ImageInput {
+  data: string;
+  mimeType: MimeType;
+}
+
 /**
- * Generates a new image by applying a clothing description to a model's photo.
- * @param base64ImageData The base64 encoded string of the model's image.
- * @param mimeType The MIME type of the model's image.
- * @param clothingPrompt A text description of the desired clothing.
+ * Generates a new image by applying a clothing item from one image to a person in another.
+ * @param modelImage The model's image.
+ * @param clothingImage The clothing item's image.
  * @returns A promise that resolves to the base64 encoded string of the generated image.
  */
 export const generateTryOnImage = async (
-  base64ImageData: string,
-  mimeType: MimeType,
-  clothingPrompt: string
+  modelImage: ImageInput,
+  clothingImage: ImageInput,
 ): Promise<string> => {
   try {
     const response = await ai.models.generateContent({
@@ -27,12 +29,18 @@ export const generateTryOnImage = async (
         parts: [
           {
             inlineData: {
-              data: base64ImageData,
-              mimeType: mimeType,
+              data: modelImage.data,
+              mimeType: modelImage.mimeType,
             },
           },
           {
-            text: `Please replace the clothing on the person in this image with: "${clothingPrompt}". It's very important that you do NOT change the person's face, hair, body shape, or the background. Only change the clothes.`,
+            inlineData: {
+                data: clothingImage.data,
+                mimeType: clothingImage.mimeType,
+            },
+          },
+          {
+            text: `Take the clothing item from the second image and realistically place it onto the person in the first image. It is critical to preserve the person's face, hair, body shape, and skin tone. The background of the first image must also remain unchanged. Only replace the existing clothing.`,
           },
         ],
       },
