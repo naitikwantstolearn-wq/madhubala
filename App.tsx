@@ -7,15 +7,25 @@ import { SparklesIcon } from './components/icons/SparklesIcon';
 import { AppState, MimeType } from './types';
 import { fileToBase64 } from './utils/fileUtils';
 import { generateTryOnImage, upscaleImage } from './services/geminiService';
-import { ClothingInput } from './components/ClothingInput';
+import { OutfitInput } from './components/OutfitInput';
+import { PlusIcon } from './components/icons/PlusIcon';
 
 const ESTIMATED_GENERATION_TIME_SECONDS = 45;
+
+type Outfit = {
+  image: File | null;
+  description: string;
+  key: number;
+};
 
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>(AppState.IDLE);
   const [modelImages, setModelImages] = useState<File[]>([]);
-  const [clothingImage, setClothingImage] = useState<File | null>(null);
-  const [clothingDescription, setClothingDescription] = useState<string>('');
+  const [outfits, setOutfits] = useState<Outfit[]>([{ image: null, description: '', key: Date.now() }]);
+  
+  // This state is used to pass the last active clothing description to the result screen for the variation prompt default.
+  const [activeClothingDescription, setActiveClothingDescription] = useState<string>('');
+  
   const [originalImageUrls, setOriginalImageUrls] = useState<string[]>([]);
   const [generatedImageUrls, setGeneratedImageUrls] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +35,6 @@ const App: React.FC = () => {
   const progressIntervalRef = useRef<number | null>(null);
 
   const [modelUploaderKey, setModelUploaderKey] = useState(Date.now());
-  const [clothingUploaderKey, setClothingUploaderKey] = useState(Date.now() + 1);
   const [upscalingStatus, setUpscalingStatus] = useState<{ [key: number]: boolean }>({});
 
   const clearProgressInterval = () => {
@@ -38,23 +47,46 @@ const App: React.FC = () => {
   useEffect(() => {
     return () => {
       clearProgressInterval();
-      originalImageUrls.forEach(URL.revokeObjectURL);
+      const uniqueUrls = [...new Set(originalImageUrls)];
+      uniqueUrls.forEach(URL.revokeObjectURL);
     }
   }, [originalImageUrls]);
 
   const handleModelImageUpload = useCallback((files: File[]) => {
-    originalImageUrls.forEach(URL.revokeObjectURL);
+    const uniqueUrls = [...new Set(originalImageUrls)];
+    uniqueUrls.forEach(URL.revokeObjectURL);
     setModelImages(files);
+    // This state is for cleanup only. The display URLs are generated on-demand.
     setOriginalImageUrls(files.map(file => URL.createObjectURL(file)));
   }, [originalImageUrls]);
 
-  const handleClothingImageUpload = useCallback((files: File[]) => {
-    setClothingImage(files[0] || null);
-  }, []);
-  
+  const handleAddOutfit = () => {
+    setOutfits(prev => [...prev, { image: null, description: '', key: Date.now() }]);
+  };
+
+  const handleRemoveOutfit = (index: number) => {
+      setOutfits(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleOutfitImageChange = (index: number, files: File[]) => {
+      setOutfits(prev => {
+          const newOutfits = [...prev];
+          newOutfits[index] = { ...newOutfits[index], image: files[0] || null };
+          return newOutfits;
+      });
+  };
+
+  const handleOutfitDescriptionChange = (index: number, value: string) => {
+      setOutfits(prev => {
+          const newOutfits = [...prev];
+          newOutfits[index] = { ...newOutfits[index], description: value };
+          return newOutfits;
+      });
+  };
+
   const handleGenerateClick = async () => {
-    if (modelImages.length === 0 || (!clothingImage && !clothingDescription.trim())) {
-      setError('Please upload at least one model image and provide either a clothing image or a description.');
+    if (modelImages.length === 0 || !outfits.some(o => o.image || o.description.trim())) {
+      setError('Please upload at least one model image and provide at least one outfit (image or description).');
       return;
     }
 
@@ -63,6 +95,26 @@ const App: React.FC = () => {
     setGeneratedImageUrls([]);
     setProgress(0);
 
+    const generationJobs: { modelImg: File; modelImgUrl: string; outfit: Outfit }[] = [];
+    const modelImageUrls = modelImages.map(file => URL.createObjectURL(file));
+
+    modelImages.forEach((modelImg, i) => {
+      for (const outfit of outfits) {
+        if (outfit.image || outfit.description.trim()) {
+          generationJobs.push({ modelImg, modelImgUrl: modelImageUrls[i], outfit });
+        }
+      }
+    });
+
+    if (generationJobs.length === 0) {
+      setError('Please provide at least one valid outfit (image or description).');
+      setAppState(AppState.IDLE);
+      modelImageUrls.forEach(URL.revokeObjectURL);
+      return;
+    }
+
+    setProgressMessage(`Preparing ${generationJobs.length} generation job(s)...`);
+    
     // Start progress timer
     const totalSteps = ESTIMATED_GENERATION_TIME_SECONDS * 10;
     let currentStep = 0;
@@ -73,40 +125,48 @@ const App: React.FC = () => {
     }, 100);
 
     try {
-        let clothingInput: { data: string; mimeType: MimeType } | null = null;
-        if (clothingImage) {
-            const clothingMimeType = clothingImage.type as MimeType;
-            if (!['image/png', 'image/jpeg'].includes(clothingMimeType)) {
-                 throw new Error('Please ensure the clothing file is a PNG or JPEG image.');
-            }
-            const clothingBase64 = await fileToBase64(clothingImage);
-            clothingInput = { data: clothingBase64, mimeType: clothingMimeType };
-        }
+      const generationPromises = generationJobs.map(async (job) => {
+          let clothingInput: { data: string; mimeType: MimeType } | null = null;
+          if (job.outfit.image) {
+              const clothingMimeType = job.outfit.image.type as MimeType;
+              if (!['image/png', 'image/jpeg'].includes(clothingMimeType)) {
+                   throw new Error('Please ensure clothing files are PNG or JPEG images.');
+              }
+              const clothingBase64 = await fileToBase64(job.outfit.image);
+              clothingInput = { data: clothingBase64, mimeType: clothingMimeType };
+          }
 
-        const generationPromises = modelImages.map(async (modelImg, index) => {
-            setProgressMessage(`Processing model ${index + 1} of ${modelImages.length}...`);
-            const modelMimeType = modelImg.type as MimeType;
-            if (!['image/png', 'image/jpeg'].includes(modelMimeType)) {
-                console.warn(`Skipping invalid model file type: ${modelImg.name}`);
-                return null;
-            }
-            const modelBase64 = await fileToBase64(modelImg);
-            const modelInput = { data: modelBase64, mimeType: modelMimeType };
-            return generateTryOnImage(modelInput, clothingInput, clothingDescription);
-        });
+          const modelMimeType = job.modelImg.type as MimeType;
+          if (!['image/png', 'image/jpeg'].includes(modelMimeType)) {
+              console.warn(`Skipping invalid model file type: ${job.modelImg.name}`);
+              return null;
+          }
+          const modelBase64 = await fileToBase64(job.modelImg);
+          const modelInput = { data: modelBase64, mimeType: modelMimeType };
+          return generateTryOnImage(modelInput, clothingInput, job.outfit.description);
+      });
 
-        const settledResults = await Promise.allSettled(generationPromises);
+      setProgressMessage(`Generating ${generationJobs.length} new image${generationJobs.length > 1 ? 's' : ''}...`);
+      const settledResults = await Promise.allSettled(generationPromises);
+      
+      const successfulResults = settledResults
+        .map((res, index) => ({ res, job: generationJobs[index] }))
+        .filter(({ res }) => res.status === 'fulfilled' && res.value);
         
-        const results = settledResults
-          .filter(res => res.status === 'fulfilled' && res.value)
-          .map(res => `data:image/png;base64,${(res as PromiseFulfilledResult<string>).value}`);
+      if (successfulResults.length === 0) {
+          throw new Error("No images could be generated. Please check your inputs or the console for details.");
+      }
+      
+      const finalGeneratedUrls = successfulResults.map(({ res }) => `data:image/png;base64,${(res as PromiseFulfilledResult<string>).value}`);
+      const finalOriginalUrlsForDisplay = successfulResults.map(({ job }) => job.modelImgUrl);
+      const successfulDescriptions = successfulResults.map(({ job }) => job.outfit.description);
 
-        if (results.length === 0) {
-            throw new Error("No images could be generated. Please check your inputs or the console for details.");
-        }
-
-        setGeneratedImageUrls(results);
-        setAppState(AppState.SUCCESS);
+      setGeneratedImageUrls(finalGeneratedUrls);
+      setOriginalImageUrls(finalOriginalUrlsForDisplay);
+      if(successfulDescriptions.length > 0) {
+        setActiveClothingDescription(successfulDescriptions[0]);
+      }
+      setAppState(AppState.SUCCESS);
 
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
@@ -117,11 +177,14 @@ const App: React.FC = () => {
         clearProgressInterval();
         setProgress(100);
         setProgressMessage('');
+        // We already created the URLs for display, now we revoke the temporary ones.
+        // The ones for display will be revoked on component unmount or next upload.
+        modelImageUrls.forEach(URL.revokeObjectURL);
     }
   };
   
   const handleGenerateVariation = async (variationPrompt: string) => {
-    if (modelImages.length !== 1) return;
+    if (modelImages.length !== 1 || outfits.length === 0) return;
 
     setAppState(AppState.LOADING);
     setError(null);
@@ -143,9 +206,10 @@ const App: React.FC = () => {
         const modelInput = { data: modelBase64, mimeType: modelMimeType };
 
         let clothingInput: { data: string; mimeType: MimeType } | null = null;
-        if (clothingImage) {
-            const clothingMimeType = clothingImage.type as MimeType;
-            const clothingBase64 = await fileToBase64(clothingImage);
+        const firstOutfit = outfits[0];
+        if (firstOutfit.image) {
+            const clothingMimeType = firstOutfit.image.type as MimeType;
+            const clothingBase64 = await fileToBase64(firstOutfit.image);
             clothingInput = { data: clothingBase64, mimeType: clothingMimeType };
         }
         
@@ -156,7 +220,15 @@ const App: React.FC = () => {
             true // isVariation flag
         );
         setGeneratedImageUrls([`data:image/png;base64,${resultBase64}`]);
-        setClothingDescription(variationPrompt); // Update description to the new one
+        // Update description to the new one
+        setActiveClothingDescription(variationPrompt); 
+        setOutfits(prev => {
+            const newOutfits = [...prev];
+            if (newOutfits[0]) {
+              newOutfits[0] = { ...newOutfits[0], description: variationPrompt };
+            }
+            return newOutfits;
+        });
         setAppState(AppState.SUCCESS);
     } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
@@ -203,8 +275,8 @@ const App: React.FC = () => {
   const handleReset = () => {
     setAppState(AppState.IDLE);
     setModelImages([]);
-    setClothingImage(null);
-    setClothingDescription('');
+    setOutfits([{ image: null, description: '', key: Date.now() }]);
+    setActiveClothingDescription('');
     originalImageUrls.forEach(URL.revokeObjectURL);
     setOriginalImageUrls([]);
     setGeneratedImageUrls([]);
@@ -212,7 +284,6 @@ const App: React.FC = () => {
     setProgress(0);
     setProgressMessage('');
     setModelUploaderKey(Date.now());
-    setClothingUploaderKey(Date.now() + 1);
     setUpscalingStatus({});
   };
   
@@ -220,17 +291,16 @@ const App: React.FC = () => {
     setAppState(AppState.IDLE);
     // Keep the model images
     setGeneratedImageUrls([]);
-    setClothingImage(null);
-    setClothingDescription('');
+    setOutfits([{ image: null, description: '', key: Date.now() }]);
+    setActiveClothingDescription('');
     setError(null);
     setProgress(0);
     setProgressMessage('');
-    setClothingUploaderKey(Date.now());
     setUpscalingStatus({});
   };
 
   const isGenerating = appState === AppState.LOADING;
-  const canGenerate = modelImages.length > 0 && (clothingImage || clothingDescription.trim() !== '');
+  const canGenerate = modelImages.length > 0 && outfits.some(o => o.image || o.description.trim() !== '');
 
   return (
     <div className="bg-gray-900 text-gray-200 min-h-screen font-sans">
@@ -244,10 +314,30 @@ const App: React.FC = () => {
                 <ImageUploader key={modelUploaderKey} onImageUpload={handleModelImageUpload} disabled={isGenerating} aspectClass="aspect-[3/4]" multiple />
               </div>
               <div className="flex flex-col gap-6 p-6 bg-gray-800/50 rounded-2xl shadow-xl">
-                <h2 className="text-xl font-semibold text-indigo-400">2. Provide Outfit</h2>
-                <p className="text-sm text-gray-400 -mt-4">Upload an image, write a description, or both!</p>
-                <ImageUploader key={clothingUploaderKey} onImageUpload={handleClothingImageUpload} disabled={isGenerating} aspectClass="aspect-square" />
-                <ClothingInput value={clothingDescription} onChange={(e) => setClothingDescription(e.target.value)} disabled={isGenerating} />
+                <h2 className="text-xl font-semibold text-indigo-400">2. Provide Outfit(s)</h2>
+                <p className="text-sm text-gray-400 -mt-4">Add multiple outfits to generate them all at once!</p>
+                <div className="flex flex-col gap-4">
+                  {outfits.map((outfit, index) => (
+                    <OutfitInput
+                      key={outfit.key}
+                      outfit={outfit}
+                      onImageChange={(files) => handleOutfitImageChange(index, files)}
+                      onDescriptionChange={(e) => handleOutfitDescriptionChange(index, e.target.value)}
+                      onRemove={() => handleRemoveOutfit(index)}
+                      isRemoveDisabled={outfits.length <= 1}
+                      disabled={isGenerating}
+                      uploaderKey={outfit.key}
+                    />
+                  ))}
+                </div>
+                <button
+                  onClick={handleAddOutfit}
+                  disabled={isGenerating}
+                  className="flex items-center justify-center gap-2 w-full mt-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded-lg transition-colors"
+                >
+                  <PlusIcon className="w-5 h-5" />
+                  Add Another Outfit
+                </button>
               </div>
             </div>
             <div className="max-w-4xl mx-auto mt-8">
@@ -261,10 +351,10 @@ const App: React.FC = () => {
                 <button
                   onClick={handleGenerateClick}
                   disabled={!canGenerate || isGenerating}
-                  className="flex items-center justify-center gap-2 w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg shadow-lg focus:outline-none focus:ring-4 focus:ring-indigo-500/50"
+                  className="flex items-center justify-center gap-2 w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg shadow-lg focus:outline-none focus:ring-4 focus:ring-indigo-500/50 transition-colors"
                 >
                     <SparklesIcon />
-                    <span>Generate New Outfit{modelImages.length > 1 ? 's' : ''}</span>
+                    <span>Generate New Outfit{modelImages.length * outfits.length > 1 ? 's' : ''}</span>
                 </button>
               )}
             </div>
@@ -273,7 +363,7 @@ const App: React.FC = () => {
           <ResultDisplay
             originalImages={originalImageUrls}
             generatedImages={generatedImageUrls}
-            clothingDescription={clothingDescription}
+            clothingDescription={activeClothingDescription}
             onTryAnother={handleTryAnotherOutfit}
             onGenerateVariation={handleGenerateVariation}
             onUpscale={handleUpscaleImage}
