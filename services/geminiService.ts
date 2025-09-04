@@ -27,16 +27,16 @@ export const generateTryOnImage = async (
   isVariation: boolean = false,
 ): Promise<string> => {
   try {
-    let prompt = isVariation ? 'Generate a creative variation of the outfit. ' : '';
+    let prompt = isVariation ? 'Generate a creative variation of this outfit. ' : '';
     const hasClothingImage = !!clothingImage;
     const hasDescription = !!description.trim();
 
     if (hasClothingImage && hasDescription) {
-      prompt += `Take the clothing item from the second image and realistically place it onto the person in the first image, using the following description as a guide: "${description}". It is critical to preserve the person's face, hair, body shape, and skin tone. The background of the first image must also remain unchanged. Only replace the existing clothing.`;
+      prompt += `Use the clothing from the second image and the description "${description}" to dress the person in the first image. Preserve the person's appearance and the background.`;
     } else if (hasClothingImage) {
-      prompt += `Take the clothing item from the second image and realistically place it onto the person in the first image. It is critical to preserve the person's face, hair, body shape, and skin tone. The background of the first image must also remain unchanged. Only replace the existing clothing.`;
+      prompt += `Place the clothing from the second image onto the person in the first image. Preserve the person's appearance and the background.`;
     } else if (hasDescription) {
-      prompt += `Based on the following description: "${description}", realistically generate a new outfit for the person in the image. It is critical to preserve the person's face, hair, body shape, and skin tone. The background of the image must also remain unchanged. Only replace the existing clothing.`;
+      prompt += `Generate a new outfit for the person in the image based on the description: "${description}". Preserve the person's appearance and the background.`;
     } else {
         // This case should be prevented by frontend validation, but as a safeguard:
         throw new Error("Either a clothing image or a description must be provided.");
@@ -65,9 +65,7 @@ export const generateTryOnImage = async (
 
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image-preview',
-      contents: {
-        parts,
-      },
+      contents: parts,
       config: {
           responseModalities: [Modality.IMAGE, Modality.TEXT],
       },
@@ -103,16 +101,14 @@ export const generateTryOnImage = async (
  */
 export const upscaleImage = async (base64Image: string, mimeType: MimeType): Promise<string> => {
     try {
-        const prompt = "Upscale this image to a high-resolution, photorealistic output. Enhance details and clarity in the textures of fabric, skin, and hair. The goal is a crisp, clean image that preserves the natural look without appearing artificial or overly smoothed.";
+        const prompt = "Upscale this image to a higher resolution, enhancing details and clarity for a photorealistic result.";
 
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash-image-preview',
-            contents: {
-                parts: [
-                    { inlineData: { data: base64Image, mimeType: mimeType } },
-                    { text: prompt }
-                ],
-            },
+            contents: [
+                { inlineData: { data: base64Image, mimeType: mimeType } },
+                { text: prompt }
+            ],
             config: {
                 responseModalities: [Modality.IMAGE, Modality.TEXT],
             },
